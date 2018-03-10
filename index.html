@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='js/three.js'></script>
+<!-- jsartookit -->
+<script src="vendor/jsartoolkit5/build/artoolkit.min.js"></script>
+<script src="vendor/jsartoolkit5/js/artoolkit.api.js"></script>
+<!-- include threex.artoolkit -->
+<script src="threex-artoolkitsource.js"></script>
+<script src="threex-artoolkitcontext.js"></script>
+<script src="threex-armarkercontrols.js"></script>
+
+<script>
+    THREEx.ArToolkitContext.baseURL = '/'
+
+</script>
+
+<style>
+    body {
+        background: #e2e2e2;
+        margin: 0px;
+        overflow: hidden;
+        font-family: Helvetica, Arial, Sans-Serif;
+    }
+    
+    canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    
+    #button {
+        padding: 0;
+        margin: 0;
+        width: 100vw;
+        height: 12vh;
+        float: left;
+        position: relative;
+        text-align: center;
+    }
+    
+    #button button {
+        margin-top: 90vh;
+        width: 20%;
+        height: 50%;
+        font-size: 100%;
+        color: white;
+        text-align: center;
+        z-index: 100;
+    }
+    
+    #button:hover {
+        cursor: pointer;
+    }
+    
+    #middlebutton {
+        width: 100%;
+        background-color: rgba(150, 150, 150, 0.8);
+        border-radius: 5px;
+        position: inherit;
+    }
+
+</style>
+
+
+<body>
+    <div id="button">
+
+        <button id="middlebutton" onclick="playVideo()">PLAY</button>
+
+    </div>
+
+    <script>
+        //Lucas Di Monte 2018
+        //Please note that user permission (a click) is required to initialize sound on a mobile device.
+        //Use the mobile emulation mode in Chrome for proper framing of your css button(s). 
+
+        //////////init variables
+        var renderer, scene, camera;
+        var arToolkitContext, onRenderFcts, arToolkitSource, markerRoot, artoolkitMarker, lastTimeMsec;
+        var params = {
+            opacity: 1
+        };
+        /////variable to access and change button text
+        var btext = document.getElementsByTagName("BUTTON")[0].textContent;
+        /////video variables
+        var video, videoImage, videoImageContext, videoTexture;
+        var pc = 0;
+
+        ///// create a video element
+        video = document.createElement('video');
+        video.src = "KOLL.mp4"; //video source location
+        video.load();
+
+        videoImage = document.createElement('canvas');
+        videoImage.width = 640;
+        videoImage.height = 360;
+        videoImageContext = videoImage.getContext('2d');
+
+        // background color if no video present
+        videoImageContext.fillStyle = '#000000';
+        videoImageContext.fillRect(0, 0, videoImage.width, videoImage.height);
+        videoTexture = new THREE.Texture(videoImage);
+        videoTexture.minFilter = THREE.LinearFilter;
+        videoTexture.magFilter = THREE.LinearFilter;
+
+        var movieMaterial = new THREE.MeshBasicMaterial({
+            map: videoTexture,
+            overdraw: true,
+            side: THREE.DoubleSide
+        });
+
+        ///// the geometry on which the video will be displayed;
+        ///// video frame will be scaled to fit these dimensions (check the dimensions of your video).
+        var movieGeometry = new THREE.PlaneGeometry(4.48, 2.52);
+        var movieScreen = new THREE.Mesh(movieGeometry, movieMaterial);
+        ///// orient video the correct way
+        movieScreen.rotation.x = Math.PI / 2;
+
+
+        /////this positions the video element at the center of the marker
+        movieScreen.position.set(0, 0, 0);
+
+        function playVideo() {
+            if ((markerRoot.visible === true)) {
+                video.play();
+                pc++;
+            }
+        }
+
+        //////////run init function
+        init();
+
+        //////////init renderer, you won't need to touch this
+        function init() {
+            renderer = new THREE.WebGLRenderer({
+                alpha: true
+            });
+            renderer.setClearColor(new THREE.Color('lightgrey'), 0);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            onRenderFcts = [];
+            scene = new THREE.Scene();
+            var ambient = new THREE.AmbientLight(0x666666);
+            scene.add(ambient);
+            var directionalLight = new THREE.DirectionalLight(0x4e5ba0);
+            directionalLight.position.set(-1, 1, 1).normalize();
+            scene.add(directionalLight);
+            camera = new THREE.Camera();
+            scene.add(camera);
+            arToolkitSource = new THREEx.ArToolkitSource({
+                sourceType: 'webcam',
+            });
+            arToolkitSource.init(function onReady() {
+
+                arToolkitSource.onResize(renderer.domElement)
+            });
+            window.addEventListener('resize', function() {
+                arToolkitSource.onResize(renderer.domElement)
+            });
+            arToolkitContext = new THREEx.ArToolkitContext({
+                cameraParametersUrl: 'data/camera_para.dat',
+                detectionMode: 'mono',
+                maxDetectionRate: 30,
+                canvasWidth: 80 * 3,
+                canvasHeight: 60 * 3,
+            });
+            arToolkitContext.init(function onCompleted() {
+                camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+            });
+            onRenderFcts.push(function() {
+                if (arToolkitSource.ready === false) return
+                arToolkitContext.update(arToolkitSource.domElement)
+            });
+
+            /////assign your marker.patt, so the camera knows to recognize it
+            /////add your custom .patt here at 'patternUrl', make sure the .patt file is in the data folder
+            markerRoot = new THREE.Group
+            scene.add(markerRoot)
+            artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+                type: 'pattern',
+                patternUrl: 'data/patt.kanji' //yours will be: 'your-marker-name.patt'
+            });
+
+
+            /////assign video element to your marker
+            markerRoot.add(movieScreen);
+
+            onRenderFcts.push(function() {});
+            onRenderFcts.push(function() {
+                renderer.render(scene, camera)
+            });
+            lastTimeMsec = null;
+            animate();
+        }
+
+        function animate(nowMsec) {
+            requestAnimationFrame(animate);
+            lastTimeMsec = lastTimeMsec || nowMsec - 1000 / 60;
+            var deltaMsec = Math.min(200, nowMsec - lastTimeMsec);
+            lastTimeMsec = nowMsec;
+            pulse = Date.now() * 0.0009;
+            onRenderFcts.forEach(function(onRenderFct) {
+                onRenderFct(deltaMsec / 1000, nowMsec / 1000);
+            });
+
+            if (markerRoot.visible === false) {
+                video.pause();
+                pc = 0;
+            }
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                videoImageContext.drawImage(video, 0, 0);
+                if (videoTexture)
+                    videoTexture.needsUpdate = true;
+            }
+
+            if (pc >= 2) {
+                video.pause();
+                pc = 0;
+            }
+
+            if (pc == 1) {
+                btext = "PAUSE";
+                var b = document.getElementById('middlebutton');
+                b.setAttribute('content', 'PAUSE');
+                b.setAttribute('class', 'btn');
+                b.innerHTML = 'PAUSE';
+
+            }
+            if (pc != 1) {
+                btext = "PLAY";
+                var b = document.getElementById('middlebutton');
+                b.setAttribute('content', 'PLAY');
+                b.setAttribute('class', 'btn');
+                b.innerHTML = 'PLAY';
+
+            }
+        }
+
+    </script>
+</body>
